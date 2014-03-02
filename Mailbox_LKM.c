@@ -9,17 +9,60 @@
 #include <linux/module.h>
 #include <linux/syscalls.h>
 #include <linux/cred.h>
+#include <asm/current.h>
 #include "mailbox.h"
+
+
 unsigned long **sys_call_table;
 asmlinkage long (*ref_sys_cs3013_syscall1)(void);
 asmlinkage long (*ref_sys_cs3013_syscall2)(void);
 asmlinkage long (*ref_sys_cs3013_syscall3)(void);
+struct nlist *lookup(pid_t id);
 	  
+static struct nlist *hashtab[HASHSIZE]; /* pointer table */
+
+struct nlist { /* table entry: */
+	struct nlist *next; /* next entry in chain */
+	pid_t pid; /* defined name */
+	char *mailbox; /* replacement text */
+};
+
+ /* hash: form hash value for string s */
+unsigned hash(pid_t id){
+	return id % HASHSIZE;
+}
+ /* lookup: look for s in hashtab */
+struct nlist *lookup(pid_t id){
+	struct nlist *np;
+	for (np = hashtab[hash(id)]; np != NULL; np = np->next)
+		if (np->pid ==id)
+		return np; /* found */
+	return NULL; /* not found */
+}
+
+
+/* install: put (name, defn) in hashtab */
+struct nlist *install(pid_t name, char *defn){
+	struct nlist *np;
+	unsigned hashval;
+	if ((np = lookup(name)) == NULL) { /* not found */
+		np = (struct nlist *) malloc(sizeof(*np));
+		if (np == NULL || (np->name = strdup(name)) == NULL)
+			return NULL;
+		hashval = hash(name);
+		np->next = hashtab[hashval];
+		hashtab[hashval] = np;
+	} else /* already there */
+	free((void *) np->defn); /*free previous defn */
+	if ((np->defn = strdup(defn)) == NULL)
+		return NULL;
+	return np;
+}
 
 asmlinkage long SendMsg(pid_t dest, void *msg, int len, bool block) {
 	CS3013_message *message;
 	int downReturn;
-	struct task_struct *Dest = find_task_by_vpid(dest);
+	struct nlist *Dest = lookup(dest);
 
 	// make sure we can get the task_struct by PID and that it has a mailbox
 	if(!Dest || Dest == NULL || Dest->mailbox == NULL) return MAILBOX_INVALID;
@@ -36,9 +79,9 @@ asmlinkage long SendMsg(pid_t dest, void *msg, int len, bool block) {
 	message->sender_pid = task_pid_nr(current);
 	INIT_LIST_HEAD(&message->list);
 
-	if(block == BLOCK) {
+	if(block == true) {
 		// keep track of the number waiting for cleanup during exit
-		++Dest->mailbox->waitingSenders;
+		Dest->mailbox->waitingSenders++;
 		downReturn = down_interruptible(Dest->mailbox->empty);
 		--Dest->mailbox->waitingSenders;
 		// if we were interrupted, retry
