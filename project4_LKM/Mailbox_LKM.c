@@ -295,9 +295,7 @@ int removeMsg(pid_t *sender, void *msg, int *len, bool block){
 		printk(KERN_INFO "removeMsg: Message = %s\n", newMsg->msg);
 		msg = newMsg->msg;
 		len = (int *)newMsg->len;
-	}
-
-	else {
+	}else {
 		printk(KERN_INFO "removeMsg: Message = %s\n", newMsg->msg);
 		printk(KERN_INFO "removeMsg: First character is %c\n", newMsg->msg[0]);
 		printk(KERN_INFO "removeMsg: Message length = %d\n", newMsg->len);

@@ -1,3 +1,10 @@
+/* Alfredo Porras
+ * July 12th, 2011
+ * CS 3013
+ * Project 4 - test program 1
+ * Tests if messages can be sent and received.
+ */
+
 #include "mailbox.h"
 #include <stdio.h>
 
