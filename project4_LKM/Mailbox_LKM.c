@@ -113,17 +113,17 @@ asmlinkage long RcvMsg(pid_t *sender, void *msg, int *len, bool block) {
 asmlinkage long ManageMailbox(bool stop, int *count){
 	HashEntry *he = getEntry(current->pid);
 	mailbox *mb = he->mb;
-	
+
 	//spin_lock(&main_lock);
 	//spin_lock(&mb->lock);
-	
+
 	if(mb == NULL){
 		return MAILBOX_INVALID;
 	}
 
 	copy_to_user(count, &mb->msgNum, sizeof(int)); // Copy the count to user
 	mb->stopped = stop; // Copy boolean value from user
-	
+
 	//spin_unlock(&main_lock);
 	//spin_unlock(&mb->lock);
 	return 0;
@@ -153,7 +153,7 @@ int create(void){
 		//spin_unlock(&main_lock);
 		return 1;
 	}
-	
+
 	// Initialize hashtable
 	for(i = 0; i < 100; i++){
 		ht->hE[i] = NULL;
@@ -231,7 +231,7 @@ HashEntry *getEntry(pid_t pid){
 			temphE->next = ahashentry;
 		}		
 	}
-	
+
 	////spin_unlock(&main_lock);
 	return ahashentry;
 }
@@ -240,15 +240,15 @@ int insertMsg(pid_t dest, void *msg, int len, bool block){
 	mailbox *mb;
 	message *newMsg;
 	printk(KERN_INFO "*************************** insertMsg *****************************\n");
-	
+
 	he = getEntry(dest);
 	mb = he->mb;
 	newMsg = NULL;
-	
+
 	//spin_lock(&main_lock);
 	//spin_lock(&mb->lock);
 	//spin_lock(&(&he->wq)->lock);
-	
+
 	if(mb->msgNum >= MAX_MAILBOX_MSG_NUM && block == false){
 		//spin_unlock(&(&he->wq)->lock);
 		//spin_unlock(&mb->lock);
@@ -289,7 +289,7 @@ int insertMsg(pid_t dest, void *msg, int len, bool block){
 	if(mb->msgNum == 1 && mb->ref_counter > 0){
 		wake_up(&mb->read_queue);
 	}
-	
+
 	//spin_unlock(&(&he->wq)->lock);
 	//spin_unlock(&mb->lock);
 	//spin_unlock(&main_lock);
@@ -304,7 +304,7 @@ int removeMsg(pid_t *sender, void *msg, int *len, bool block){
 	message *newMsg = NULL;
 
 	printk(KERN_INFO "*************************** removeMsg *****************************\n");
-	
+
 	//spin_lock(&main_lock);
 	////spin_lock(&mb->lock);
 	////spin_lock(&(&he->wq)->lock);
@@ -383,10 +383,10 @@ int removeMsg(pid_t *sender, void *msg, int *len, bool block){
 	// Update the array of messages inside the mailbox
 	mb->msgNum--;
 	for(i = 0; i < mb->msgNum; i++){
-			mb->messages[i] = mb->messages[i + 1];
+		mb->messages[i] = mb->messages[i + 1];
 	}
 	mb->messages[mb->msgNum] = NULL;
-	
+
 	printk(KERN_INFO "*******************************************************************");
 	////spin_unlock(&(&he->wq)->lock);
 	////spin_unlock(&mb->lock);
@@ -405,7 +405,7 @@ int remove(pid_t pid){
 	// Search for mailbox
 	prev = ht->hE[hash(pid)];
 	crnt = ht->hE[hash(pid)];
-	
+
 	while(crnt != NULL){
 		if(crnt->pid == pid){
 			// Reposition the linkedlist of hashEntrys
@@ -417,7 +417,7 @@ int remove(pid_t pid){
 				kmem_cache_free(message_cache, &mb->messages[j]);
 			}
 			kmem_cache_free(mailbox_cache, &crnt); // Free mailbox in cache
-		
+
 			//spin_unlock(&main_lock);
 			return 0;
 		}else{
@@ -428,7 +428,7 @@ int remove(pid_t pid){
 
 	//spin_unlock(&main_lock);
 	return MAILBOX_INVALID; // Mailbox not found in hashtable
-	
+
 } // int remove(hashtable *h, int pid)
 
 static unsigned long **find_sys_call_table(void) {
@@ -505,7 +505,7 @@ Cancel the module loading step. */
 	mailbox_cache = kmem_cache_create("mailbox_cache", sizeof(mailbox) + sizeof(message *)*MAX_MAILBOX_MSG_NUM, 0, 0, NULL);
 	message_cache = kmem_cache_create("message_cache", sizeof(message), 0, 0, NULL);
 	create();
-	
+
 	/* And indicate the load was successful */
 	printk(KERN_INFO "Loaded interceptor!");
 
