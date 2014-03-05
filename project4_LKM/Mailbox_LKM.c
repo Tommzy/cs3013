@@ -141,8 +141,7 @@ asmlinkage long MailboxExitGroup(int error_code){
 } // asmlinkage long MailboxExitGroup(int error_code)
 
 void doExit(void){
-	int currentPID = current->pid;
-	remove(currentPID);
+	remove(current->pid);
 }
 
 int create(void){
@@ -396,7 +395,7 @@ int removeMsg(pid_t *sender, void *msg, int *len, bool block){
 
 
 
-int remove(int pid){
+int remove(pid_t pid){
 	int i, j;
 	mailbox *temp;
 	mailbox *prev;
