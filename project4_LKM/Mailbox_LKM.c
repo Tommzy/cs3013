@@ -115,7 +115,7 @@ asmlinkage long ManageMailbox(bool stop, int *count){
 	mailbox *mb = he->mb;
 	
 	spin_lock(&main_lock);
-	spin_lock(&mb->lock);
+	//spin_lock(&mb->lock);
 	
 	if(mb == NULL){
 		return MAILBOX_INVALID;
@@ -125,7 +125,7 @@ asmlinkage long ManageMailbox(bool stop, int *count){
 	mb->stopped = stop; // Copy boolean value from user
 	
 	spin_unlock(&main_lock);
-	spin_unlock(&mb->lock);
+	//spin_unlock(&mb->lock);
 	return 0;
 }	// asmlinkage long ManageMailbox(bool stop, int *count)
 
@@ -202,7 +202,7 @@ int hash(pid_t pid){
 	return (int) pid * 31 % HASH_TABLE_SIZE;
 }
 HashEntry *getEntry(pid_t pid){
-	HashEntry* ahe;
+	HashEntry* ahashentry;
 	HashEntry *temphE;
 	HashEntry *he;
 	bool find;
@@ -210,10 +210,11 @@ HashEntry *getEntry(pid_t pid){
 	spin_lock(&main_lock);
 	//TODO double check here
 	if( (temphE = ht->hE[hash(pid)]) == NULL) {
-		ahe = createHashEntry(pid);
-		ht->hE[hash(pid)] = ahe;
+		ahashentry = createHashEntry(pid);
+		ht->hE[hash(pid)] = ahashentry;
 	}else{
 		find = false;
+		he = temphE;
 		while ((temphE->next != NULL) && !find){
 			he = temphE->next;
 			if (he->pid == pid){
@@ -223,15 +224,15 @@ HashEntry *getEntry(pid_t pid){
 			}
 		}
 		if (find){
-			ahe = he;
+			ahashentry = he;
 		}else{
-			ahe = createHashEntry(pid);
-			temphE->next = ahe;
+			ahashentry = createHashEntry(pid);
+			temphE->next = ahashentry;
 		}		
 	}
 	
 	spin_unlock(&main_lock);
-	return ahe;
+	return ahashentry;
 }
 int insertMsg(pid_t dest, void *msg, int len, bool block){
 	HashEntry *he;
@@ -244,13 +245,12 @@ int insertMsg(pid_t dest, void *msg, int len, bool block){
 	newMsg = NULL;
 	
 	spin_lock(&main_lock);
-	spin_lock(&mb->lock);
-	spin_lock(&(&he->wq)->lock);
+	//spin_lock(&mb->lock);
+	//spin_lock(&(&he->wq)->lock);
 	
 	if(mb->msgNum >= MAX_MAILBOX_MSG_NUM && block == false){
-		spin_unlock(&(&he->wq)->lock);
-		spin_unlock(&(&he->wq)->lock);
-		spin_unlock(&mb->lock);
+		//spin_unlock(&(&he->wq)->lock);
+		//spin_unlock(&mb->lock);
 		spin_unlock(&main_lock);
 		return MAILBOX_FULL;
 	}
@@ -265,8 +265,8 @@ int insertMsg(pid_t dest, void *msg, int len, bool block){
 
 	// Check message length
 	if(len > MAX_MSG_SIZE){
-		spin_unlock(&(&he->wq)->lock);
-		spin_unlock(&mb->lock);
+		//spin_unlock(&(&he->wq)->lock);
+		//spin_unlock(&mb->lock);
 		spin_unlock(&main_lock);
 		return MSG_LENGTH_ERROR;
 	}
@@ -285,12 +285,12 @@ int insertMsg(pid_t dest, void *msg, int len, bool block){
 	printk(KERN_INFO "SendMsg: Message length = %d", mb->messages[mb->msgNum-1]->len);
 	printk(KERN_INFO "*******************************************************************");
 
-	//if(mb->msgNum == 1 && mb->ref_counter > 0){
-	//	wake_up(&mb->read_queue);
-	//}
+	if(mb->msgNum == 1 && mb->ref_counter > 0){
+		wake_up(&mb->read_queue);
+	}
 	
-	spin_unlock(&(&he->wq)->lock);
-	spin_unlock(&mb->lock);
+	//spin_unlock(&(&he->wq)->lock);
+	//spin_unlock(&mb->lock);
 	spin_unlock(&main_lock);
 
 	return 0;
@@ -305,16 +305,16 @@ int removeMsg(pid_t *sender, void *msg, int *len, bool block){
 	printk(KERN_INFO "*************************** removeMsg *****************************\n");
 	
 	spin_lock(&main_lock);
-	spin_lock(&mb->lock);
-	spin_lock(&(&he->wq)->lock);
+	////spin_lock(&mb->lock);
+	////spin_lock(&(&he->wq)->lock);
 
 	printk("RcvMsg: Mailbox PID = %d\n", mb->pid);
 
 	newMsg = mb->messages[0];	
 	if(newMsg == NULL){
 		printk(KERN_INFO "RcvMsg: Mailbox is empty. Returning...");
-		spin_unlock(&(&he->wq)->lock);
-		spin_unlock(&mb->lock);
+		////spin_unlock(&(&he->wq)->lock);
+		////spin_unlock(&mb->lock);
 		spin_unlock(&main_lock);
 		return -1;
 	}
@@ -328,16 +328,16 @@ int removeMsg(pid_t *sender, void *msg, int *len, bool block){
 	}
 
 	if(mb->msgNum == 0 && mb->stopped == false && !block){
-		spin_unlock(&(&he->wq)->lock);
-		spin_unlock(&mb->lock);
+		////spin_unlock(&(&he->wq)->lock);
+		////spin_unlock(&mb->lock);
 		spin_unlock(&main_lock);
 		return MAILBOX_EMPTY;
 	}
 
 	if(mb->stopped){
 		if(mb->msgNum == 0){
-			spin_unlock(&(&he->wq)->lock);
-			spin_unlock(&mb->lock);
+			////spin_unlock(&(&he->wq)->lock);
+			////spin_unlock(&mb->lock);
 			spin_unlock(&main_lock);
 			return MAILBOX_STOPPED;
 		}
@@ -346,30 +346,30 @@ int removeMsg(pid_t *sender, void *msg, int *len, bool block){
 		msg = newMsg->msg;
 		len = (int *)newMsg->len;
 	}else {
-//		printk(KERN_INFO "RcvMsg: Message = %s\n", newMsg->msg);
-//		printk(KERN_INFO "RcvMsg: First character is %c\n", newMsg->msg[0]);
-//		printk(KERN_INFO "RcvMsg: Message length = %d\n", newMsg->len);
+		printk(KERN_INFO "RcvMsg: Message = %s\n", newMsg->msg);
+		printk(KERN_INFO "RcvMsg: First character is %c\n", newMsg->msg[0]);
+		printk(KERN_INFO "RcvMsg: Message length = %d\n", newMsg->len);
 
 		// Copy the string back to the receiving mailbox
 		if(copy_to_user(msg, newMsg->msg, newMsg->len)){
-			spin_unlock(&(&he->wq)->lock);
-			spin_unlock(&mb->lock);
+			////spin_unlock(&(&he->wq)->lock);
+			//spin_unlock(&mb->lock);
 			spin_unlock(&main_lock);
 			return EFAULT;
 		}
 
 		// Copy sender PID
 		if(copy_to_user(sender, &newMsg->sender, sizeof(pid_t))){
-			spin_unlock(&(&he->wq)->lock);
-			spin_unlock(&mb->lock);
+			//spin_unlock(&(&he->wq)->lock);
+			//spin_unlock(&mb->lock);
 			spin_unlock(&main_lock);
 			return EFAULT;
 		}
 
 		// Copy message length
 		if(copy_to_user(len, &newMsg->len, sizeof(int))){
-			spin_unlock(&(&he->wq)->lock);
-			spin_unlock(&mb->lock);
+			//spin_unlock(&(&he->wq)->lock);
+			//spin_unlock(&mb->lock);
 			spin_unlock(&main_lock);
 			return EFAULT;
 		}
@@ -387,61 +387,47 @@ int removeMsg(pid_t *sender, void *msg, int *len, bool block){
 	mb->messages[mb->msgNum] = NULL;
 	
 	printk(KERN_INFO "*******************************************************************");
-	spin_unlock(&(&he->wq)->lock);
-	spin_unlock(&mb->lock);
+	////spin_unlock(&(&he->wq)->lock);
+	////spin_unlock(&mb->lock);
 	spin_unlock(&main_lock);
 	return 0;
 } // int removeMsg(int *sender, void *msg, int *len, bool block)
 
-
-
 int remove(pid_t pid){
-	int i, j;
-	mailbox *temp;
-	mailbox *prev;
-	mailbox *next;
-	i = 0;
+	int j;
+	HashEntry *prev;
+	HashEntry *crnt;
+	mailbox* mb;
 
 	spin_lock(&main_lock);
 
-	if (ht != NULL) {
-		// Search for mailbox
-		prev = ht->hE[0];
-		next = ht->hE[0];
+	// Search for mailbox
+	prev = ht->hE[hash(pid)];
+	crnt = ht->hE[hash(pid)];
+	
+	while(crnt != NULL){
+		if(crnt->pid == pid){
+			// Reposition the linkedlist of hashEntrys
+			prev->next = crnt->next;
 
-		while(next != NULL){
-			if(next->pid == pid){
-				temp = next->next;
-				//TODO also here, mailbox does not have "next"
-				prev->next = temp;
-
-				// Reposition array of mailboxes
-				for(j = i; j < ht->size; j++){
-					ht->mailboxes[j] = ht->mailboxes[j + 1];
-				}
-
-				// Free up all messages
-				for(j = 0; j < next->msgNum; j++){
-					kmem_cache_free(message_cache, &next->messages[j]);
-				}
-
-				kmem_cache_free(mailbox_cache, &next); // Free mailbox in cache
-				ht->boxNum--;
-				spin_unlock(&main_lock);
-				return 0;
+			// Free up all messages
+			mb = crnt->mb;
+			for(j = 0; j < mb->msgNum; j++){
+				kmem_cache_free(message_cache, &mb->messages[j]);
 			}
-
-			prev = next;
-			next = next->next;
-			i++;
+			kmem_cache_free(mailbox_cache, &crnt); // Free mailbox in cache
+		
+			spin_unlock(&main_lock);
+			return 0;
+		}else{
+			prev = crnt;
+			crnt = crnt->next;
 		}
-
-		spin_unlock(&main_lock);
-		return MAILBOX_INVALID; // Mailbox not found in hashtable
 	}
 
 	spin_unlock(&main_lock);
-	return 0;
+	return MAILBOX_INVALID; // Mailbox not found in hashtable
+	
 } // int remove(hashtable *h, int pid)
 
 static unsigned long **find_sys_call_table(void) {
@@ -514,8 +500,7 @@ Cancel the module loading step. */
 	sys_call_table[__NR_exit_group] = (unsigned long *)MailboxExitGroup;
 	enable_page_protection();
 
-	spin_lock_init(&main_lock);
-	//HashEntry_cache = kmem_cache_create("HashEntry_cache", sizeof(HashEntry) + sizeof(mailbox *)*32, 0, 0, NULL);
+	//spin_lock_init(&main_lock);
 	mailbox_cache = kmem_cache_create("mailbox_cache", sizeof(mailbox) + sizeof(message *)*MAX_MAILBOX_MSG_NUM, 0, 0, NULL);
 	message_cache = kmem_cache_create("message_cache", sizeof(message), 0, 0, NULL);
 	create();
@@ -528,7 +513,8 @@ static void __exit interceptor_end(void) {
 	/* If we don't know what the syscall table is, don't bother. */
 	if(!sys_call_table)
 		return;
-
+	kmem_cache_destroy(mailbox_cache);
+	kmem_cache_destroy(message_cache);
 	/* Revert all system calls to what they were before we began. */
 	disable_page_protection();
 	sys_call_table[__NR_cs3013_syscall1] = (unsigned long *)ref_cs3013_syscall1;
