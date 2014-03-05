@@ -50,12 +50,11 @@ typedef struct HashEntry_s {
 	pid_t pid;
 	mailbox* mb;
 	wait_queue_head_t wq;
-	struct HashEntry* next;
-	
+	struct HashEntry_s* next;
 }HashEntry;
 
 typedef struct hashtable_s {
-	struct HashEntry *hE[100];
+	struct HashEntry_s *hE[100];
 } hashtable; // struct hashtable
 
 
@@ -65,7 +64,7 @@ unsigned long **sys_call_table;
 struct kmem_cache *mailbox_cache = NULL;
 struct kmem_cache *message_cache = NULL;
 struct kmem_cache *HashEntry_cache = NULL;
-hashtable *ht = NULL;
+hashtable *ht;
 static spinlock_t main_lock;
 
 
@@ -148,7 +147,6 @@ void doExit(void){
 
 int create(void){
 	int i;
-
 	spin_lock(&main_lock);
 	// Allocate space for hashtable
 	if((ht = (hashtable *)kmalloc(sizeof(hashtable), GFP_KERNEL)) == NULL){
@@ -165,9 +163,10 @@ int create(void){
 	spin_unlock(&main_lock);
 	return 0;
 } // hashtable *create(void)
+
 HashEntry* createHashEntry(pid_t pid){
-	spin_lock(&main_lock);
 	HashEntry* newHashEntry;
+	spin_lock(&main_lock);
 	newHashEntry =	(HashEntry*)kmalloc(sizeof(HashEntry), GFP_KERNEL);
 	newHashEntry->pid = pid;
 	newHashEntry->mb = createMailbox(pid);
@@ -204,16 +203,16 @@ int hash(pid_t pid){
 	return (int) pid * 31 % HASH_TABLE_SIZE;
 }
 HashEntry *getEntry(pid_t pid){
-	spin_lock(&main_lock);
-	
-	HashEntry *ahe;
+	HashEntry* ahe;
 	HashEntry *temphE;
 	HashEntry *he;
 	bool find;
 
+	spin_lock(&main_lock);
 	//TODO double check here
 	if( (temphE = ht->hE[hash(pid)]) == NULL) {
 		ahe = createHashEntry(pid);
+		ht->hE[hash(pid)] = ahe;
 	}else{
 		find = false;
 		while ((temphE->next != NULL) && !find){
@@ -236,11 +235,14 @@ HashEntry *getEntry(pid_t pid){
 	return ahe;
 }
 int insertMsg(pid_t dest, void *msg, int len, bool block){
+	HashEntry *he;
+	mailbox *mb;
+	message *newMsg;
 	printk(KERN_INFO "*************************** insertMsg *****************************\n");
 	
-	HashEntry *he = getEntry(dest);
-	mailbox *mb = he->mb;
-	message *newMsg = NULL;
+	he = getEntry(dest);
+	mb = he->mb;
+	newMsg = NULL;
 	
 	spin_lock(&main_lock);
 	spin_lock(&mb->lock);
@@ -501,7 +503,6 @@ Cancel the module loading step. */
 	ref_cs3013_syscall1 = (void *)sys_call_table[__NR_cs3013_syscall1];
 	ref_cs3013_syscall2 = (void *)sys_call_table[__NR_cs3013_syscall2];
 	ref_cs3013_syscall3 = (void *)sys_call_table[__NR_cs3013_syscall3];
-	asmlinkage long (*ref_sys_exit)(int error_code);
 	ref_sys_exit = (void *)sys_call_table[__NR_exit];
 	ref_sys_exit_group = (void *)sys_call_table[__NR_exit_group];
 
@@ -514,12 +515,13 @@ Cancel the module loading step. */
 	sys_call_table[__NR_exit_group] = (unsigned long *)MailboxExitGroup;
 	enable_page_protection();
 
-	HashEntry_cache = kmem_cache_create("HashEntry_cache", sizeof(HashEntry) + sizeof(mailbox *)*32, 0, 0, NULL);
+	spin_lock_init(&main_lock);
+	//HashEntry_cache = kmem_cache_create("HashEntry_cache", sizeof(HashEntry) + sizeof(mailbox *)*32, 0, 0, NULL);
 	mailbox_cache = kmem_cache_create("mailbox_cache", sizeof(mailbox) + sizeof(message *)*MAX_MAILBOX_MSG_NUM, 0, 0, NULL);
 	message_cache = kmem_cache_create("message_cache", sizeof(message), 0, 0, NULL);
 	create();
 	
-	spin_lock_init(&main_lock);
+
 	return 0;
 }	// static int __init interceptor_start(void)
 
