@@ -61,6 +61,7 @@ typedef struct hashtable_s {
 extern struct kmem_cache *cache;
 unsigned long **sys_call_table;
 struct kmem_cache *message_cache = NULL;
+struct kmem_cache *mailbox_cache = NULL;
 
 hashtable *ht;
 static spinlock_t main_lock;
@@ -81,6 +82,8 @@ mailbox *createMailbox(pid_t pid);
 
 long SendMsg(pid_t dest, void *msg, int len, bool block) {
 	int err;
+
+	printk(KERN_INFO "SendMsg: sending message");
 
 	err = insertMsg(dest, msg, len, block);
 
@@ -150,6 +153,7 @@ int create(void){
 		return 1;
 	}
 
+	printk(KERN_INFO "Initializing hashtable!");
 	// Initialize hashtable
 	for(i = 0; i < 100; i++){
 		ht->hE[i] = NULL;
@@ -160,24 +164,34 @@ int create(void){
 
 HashEntry* createHashEntry(pid_t pid){
 	HashEntry* newHashEntry;
+	printk(KERN_INFO "Initializing HashEntry!");
+
 	newHashEntry =	(HashEntry*)kmalloc(sizeof(HashEntry), GFP_KERNEL);
 	newHashEntry->pid = pid;
 	newHashEntry->mb = createMailbox(pid);
+
+	printk(KERN_INFO "In createHashEntry: init_waitqueue_head(&newHashEntry->wq)!");
 	init_waitqueue_head(&newHashEntry->wq);
 	newHashEntry->next = NULL;
 	return newHashEntry;
 }
 mailbox *createMailbox(pid_t pid){
-	int i;
-	mailbox *newBox = (mailbox*)kmalloc(sizeof(mailbox), GFP_KERNEL); // Allocate mailbox from cache
 
+	int i;
+	printk(KERN_INFO "createMailbox: Initializing mailbox!");
+
+	printk(KERN_INFO "createMailbox: malloc newmailbox!");
+//	mailbox *newBox = (mailbox*)kmalloc(sizeof(mailbox), GFP_KERNEL); // Allocate mailbox from cache
+	mailbox *newBox = kmem_cache_alloc(mailbox_cache, GFP_KERNEL);
 	// Init values
 	newBox->pid = pid;
 	newBox->ref_counter = 0;
 	newBox->msgNum = 0;
 	newBox->stopped = false;
 	//TODO next is not in the mailbox
+	printk(KERN_INFO "createMailbox: waitqueue read!");
 	init_waitqueue_head(&newBox->read_queue);
+	printk(KERN_INFO "createMailbox: waitqueue wait!");
 	init_waitqueue_head(&newBox->write_queue);
 
 	// Initialize messages to NULL
@@ -196,7 +210,11 @@ HashEntry *getEntry(pid_t pid){
 	HashEntry *he;
 	bool find;
 
+	printk(KERN_INFO "getEntry: waitqueue wait!");
+
 	spin_lock(&main_lock);
+
+	printk(KERN_INFO "createMailbox: waitqueue wait!");
 
 	//TODO double check here
 	if( (temphE = ht->hE[hash(pid)]) == NULL) {
@@ -268,10 +286,10 @@ int insertMsg(pid_t dest, void *msg, int len, bool block){
 	printk(KERN_INFO "SendMsg: New message = %s\n", mb->messages[mb->msgNum-1]->msg);
 	printk(KERN_INFO "SendMsg: Message length = %d", mb->messages[mb->msgNum-1]->len);
 	printk(KERN_INFO "*******************************************************************");
-//
-//	if(mb->msgNum == 1 && mb->ref_counter > 0){
-//		wake_up(&mb->read_queue);
-//	}
+
+	if(mb->msgNum == 1 && mb->ref_counter > 0){
+		wake_up(&mb->read_queue);
+	}
 
 	spin_unlock(&(&he->wq)->lock);
 
@@ -469,6 +487,7 @@ Cancel the module loading step. */
 
 	spin_lock_init(&main_lock);
 	message_cache = kmem_cache_create("message_cache", sizeof(message), 0, 0, NULL);
+	mailbox_cache = kmem_cache_create("mailbox_cache", sizeof(mailbox), 0, 0, NULL);
 	create();
 
 	/* And indicate the load was successful */
