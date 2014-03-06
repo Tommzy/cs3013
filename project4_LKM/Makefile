@@ -7,10 +7,7 @@ KDIR:=/lib/modules/$(shell uname -r)/build
 PWD:=$(shell pwd)
 
 all:
-	make clean
 	$(MAKE) -C $(KDIR) M=$(PWD) modules
-	sudo rmmod Mailbox_LKM.ko
-	sudo insmod Mailbox_LKM.ko
 
 clean:
 	$(MAKE) -C $(KDIR) M=$(PWD) clean

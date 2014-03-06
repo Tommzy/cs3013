@@ -45,6 +45,7 @@ int main() {
 	printf("Send failed\n");
       }
     }
+    sleep(0.3);
   }
   
   printf("prepare to reply\n");
